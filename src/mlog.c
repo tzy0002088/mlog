@@ -1,6 +1,21 @@
 #include <stdint.h>
 #include "mlog.h"
 
+struct mlog_frame
+{
+    uint32_t magic : 8;
+    uint32_t level : 4;
+    uint32_t log_len : 20;
+    uint8_t *log_buf;
+};
+
+struct mlog_async_rb
+{
+    uint8_t buf[4096];
+    uint32_t read_index;
+    uint32_t write_index;
+};
+
 struct mlog
 {
     char log_buf_th[MLOG_LINE_MAX_SIZE + 1];
@@ -11,6 +26,7 @@ struct mlog
         char *tag; // 全局 tag 过滤
     } filter;
     slist_t backend_list;
+    struct mlog_async_rb async_rb;
 };
 
 extern void mlog_port_lock(void);
@@ -23,7 +39,7 @@ extern void mlog_port_async_notify(void);
 
 void mlog_output(uint8_t level, const char *tag, const char *format, ...)
 {
-    
+
 }
 
 int mlog_init(void)

@@ -17,12 +17,11 @@ extern "C"{
 #define LOG_RAW(...)
 
 int mlog_init(void);
-
 int mlog_async_loop(void);
 
 /* output */
+/* 如果是异步输出，格式化完事的 log 存放到哪里？ */
 void mlog_output(uint8_t level, const char *tag, const char *format, ...);
-/* 刷新所有后端 */
 void mlog_flush(void);
 
 /* 后端注册 */
