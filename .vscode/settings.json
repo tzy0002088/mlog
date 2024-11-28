@@ -1,0 +1,10 @@
+{
+    "clangd.path": "/usr/bin/clangd",
+    "clangd.arguments": [
+        "--background-index",
+        "--compile-commands-dir=${workspaceFolder}/build", //compile_commands.json
+        "--clang-tidy",
+        "--clang-tidy-checks=performance-*,bugprone-*",
+        "--completion-style=detailed",
+        ],
+}

@@ -24,6 +24,8 @@ int mlog_async_loop(void);
 void mlog_output(uint8_t level, const char *tag, const char *format, ...);
 void mlog_flush(void);
 
+void mlog_async_output(const char *name);
+
 /* 后端注册 */
 int mlog_backend_register(struct mlog_backend *backend, const char *name, int sup_color);
 int mlog_backend_unregister(struct mlog_backend *backend);

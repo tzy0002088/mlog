@@ -25,9 +25,9 @@ const char *mlog_port_thread_name(void)
     return "main";
 }
 
-void mlog_port_async_wait(int time)
+int mlog_port_async_wait(int time)
 {
-
+    return 0;
 }
 
 void mlog_port_async_notify(void)

@@ -7,6 +7,7 @@ project(mlog)
 # Set the C standard (optional, but recommended)
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED True)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Include directories for headers
 include_directories(

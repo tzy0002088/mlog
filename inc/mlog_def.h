@@ -2,7 +2,6 @@
 #define __MLOG_DEF_H__
 
 #include <stddef.h>
-#include "mlog_cfg.h"
 #include "mlog_list.h"
 
 #ifdef __cplusplus
