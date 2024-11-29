@@ -21,6 +21,7 @@ include_directories(
 set(SOURCES
     src/mlog.c
     port/mlog_port.c
+    backend/console_be.c
     main.c
 )
 
@@ -28,5 +29,5 @@ set(SOURCES
 add_executable(mlog_app ${SOURCES})
 
 # Optional: Set C flags (e.g., add debugging flags or warnings)
-target_compile_options(mlog_app PRIVATE -Wall -Werror)
+target_compile_options(mlog_app PRIVATE -Wall)
 

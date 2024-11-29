@@ -14,14 +14,14 @@ extern "C"{
 #define LOG_I(...)          mlog_i(LOG_TAG, __VA_ARGS__)
 #define LOG_E(...)          mlog_e(LOG_TAG, __VA_ARGS__)
 #define LOG_D(...)          mlog_d(LOG_TAG, __VA_ARGS__)
-#define LOG_RAW(...)
+#define LOG_RAW(...)        mlog_raw(__VA_ARGS__)
 
 int mlog_init(void);
 int mlog_async_loop(void);
 
-/* output */
-/* 如果是异步输出，格式化完事的 log 存放到哪里？ */
+
 void mlog_output(uint8_t level, const char *tag, const char *format, ...);
+void mlog_raw(const char *format, ...);
 void mlog_flush(void);
 
 void mlog_async_output(const char *name);

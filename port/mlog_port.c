@@ -1,5 +1,3 @@
-#include "mlog.h"
-
 void mlog_port_lock(void)
 {
     
