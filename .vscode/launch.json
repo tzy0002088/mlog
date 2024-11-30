@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug",
+            "program": "/home/tzy/inspiration/mlog/build/mlog_app",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+        }
+    ]
+}

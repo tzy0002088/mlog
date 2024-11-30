@@ -6,5 +6,6 @@
 #define MLOG_ASYNC_LOG_BUF          (2048U)
 #define MLOG_USING_ASYNC_OUTPUT     (0)
 #define MLOG_USING_FILTER           (1)
+#define MLOG_OUTPUT_THREAD_NAME     (1)
 
 #endif //__MLOG_CFG_H__

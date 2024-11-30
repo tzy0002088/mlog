@@ -28,6 +28,8 @@ set(SOURCES
 # Define the executable target
 add_executable(mlog_app ${SOURCES})
 
+target_link_libraries(mlog_app PRIVATE pthread -fsanitize=address)
 # Optional: Set C flags (e.g., add debugging flags or warnings)
-target_compile_options(mlog_app PRIVATE -Wall)
+target_compile_options(mlog_app PRIVATE -Wall -fsanitize=address -g)
+
 

@@ -3,7 +3,9 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 #include "mlog.h"
+#include "mlog_list.h"
 
 /*
 * +------+---------+------+---------+-----+--------+----------+
@@ -11,19 +13,22 @@
 * +------+---------+------+---------+-----+--------+----------+
 */
 
+#define MLOG_FRAME_MAGIC        (0x68)
+
 struct mlog_frame
 {
     uint32_t magic : 8;
     uint32_t level : 4;
     uint32_t log_len : 20;
     char *log; // ---> payload
+    const char *tag;
 };
 
 struct mlog_async_rb
 {
     char buf[MLOG_ASYNC_LOG_BUF];
-    uint32_t read_index;
-    uint32_t write_index;
+    uint16_t read_index;
+    uint16_t write_index;
 };
 
 struct mlog
@@ -108,39 +113,9 @@ static char *mlog_get_log_buf(void)
         return mlog.log_buf_isr;
 }
 
-static int mlog_async_buf_use(void)
+static void mlog_output_to_all_backend(uint8_t level, const char *tag, char *log_buf, size_t log_len)
 {
-    return 0;
-}
-
-static void *mlog_async_buf_alloc(size_t size)
-{
-    /* 返回一个地址，并移动写指针 */
-    return 0;
-}
-
-static uint8_t *mlog_async_buf_read(size_t size)
-{
-    /* 返回一个地址，并移动读指针 */
-    return 0;
-}
-
-static void mlog_do_output(uint8_t level, const char *tag, char *log_buf, size_t len)
-{
-#if MLOG_USING_ASYNC_OUTPUT
-    extern void mlog_port_async_notify(void);
-    struct mlog_frame *log_frame = mlog_async_buf_alloc(sizeof(struct mlog_frame) + len);
-    if (log_frame)
-    {
-        log_frame->magic = 0x6d;
-        log_frame->level = level;
-        log_frame->log_len = len;
-        log_frame->log = (char *)log_frame + sizeof (*log_frame);
-        strncpy(log_frame->log, log_buf,  len);
-        mlog_port_async_notify();
-    }
-#else
-    /* 输出到所有的后端 */
+    size_t drop_len;
     slist_t *node;
     mlog_backend_t *backend;
     for (node = slist_first(&mlog.backend_list); node; node = slist_next(node))
@@ -150,22 +125,45 @@ static void mlog_do_output(uint8_t level, const char *tag, char *log_buf, size_t
         {
             if (backend->sup_color)
             {
-                backend->output(backend, log_buf, len);
+                backend->output(backend, log_buf, log_len);
             }
             else
             {
-                /* drop color size*/
+                if (level_to_color[level])
+                {
+                    drop_len = strlen(level_to_color[level]) + strlen(CSI_START);
+                    log_buf += drop_len;
+                    log_len -= (drop_len + strlen(CSI_END));
+                }
+                backend->output(backend, log_buf, log_len);
             }
         }
     }
+}
 
+static void mlog_do_output(uint8_t level, const char *tag, char *log_buf, size_t log_len)
+{
+#if MLOG_USING_ASYNC_OUTPUT
+    extern void mlog_port_async_notify(void);
+    struct mlog_frame *log_frame = mlog_async_buf_alloc(sizeof(struct mlog_frame) + log_len);
+    if (log_frame)
+    {
+        log_frame->magic = MLOG_FRAME_MAGIC;
+        log_frame->level = level;
+        log_frame->log_len = log_len;
+        log_frame->tag = tag;
+        log_frame->log = (char *)log_frame + sizeof (*log_frame);
+        strncpy(log_frame->log, log_buf,  log_len);
+        mlog_port_async_notify();
+    }
+#else
+    mlog_output_to_all_backend(level, tag, log_buf, log_len);
 #endif
-
 }
 
 static int mlog_head_formater(uint8_t level, const char *tag, char *log_buf)
 {
-    uint8_t fmt_len = 0;
+    int fmt_len = 0;
     extern const char *mlog_port_thread_name(void);
 
     if (level_to_color[level])
@@ -173,7 +171,15 @@ static int mlog_head_formater(uint8_t level, const char *tag, char *log_buf)
         fmt_len = snprintf(log_buf, MLOG_LINE_MAX_SIZE, "%s", CSI_START);
         fmt_len += snprintf(log_buf + fmt_len, MLOG_LINE_MAX_SIZE, "%s", level_to_color[level]);
     }
-    fmt_len += snprintf(log_buf + fmt_len, MLOG_LINE_MAX_SIZE, "[%s%s]: ", level_to_info[level], tag);
+    fmt_len += snprintf(log_buf + fmt_len, MLOG_LINE_MAX_SIZE, "[%s%s]", level_to_info[level], tag);
+
+#if MLOG_OUTPUT_THREAD_NAME
+    fmt_len += snprintf(log_buf + fmt_len, MLOG_LINE_MAX_SIZE, " ");
+    fmt_len += snprintf(log_buf + fmt_len, MLOG_LINE_MAX_SIZE, "%s", mlog_port_thread_name());
+#endif
+
+    fmt_len += snprintf(log_buf + fmt_len, MLOG_LINE_MAX_SIZE, ": ");
+
     return fmt_len;
 }
 
@@ -210,7 +216,6 @@ void mlog_output(uint8_t level, const char *tag, const char *format, ...)
         return;
 #endif
     log_buf = mlog_get_log_buf();
-
     mlog_lock();
     va_start(args, format);
     log_len = mlog_formater(level, tag, log_buf, format, args);
@@ -246,11 +251,6 @@ int mlog_init(void)
     return 0;
 }
 
-void mlog_async_output(const char *name)
-{
-    
-}
-
 void mlog_flush(void)
 {
 
@@ -269,15 +269,105 @@ int mlog_backend_register(struct mlog_backend *backend, const char *name, int su
     return 0;
 }
 
+mlog_backend_t *mlog_backend_find(const char *name)
+{
+    slist_t *node;
+    mlog_backend_t *backend;
+    for (node = slist_first(&mlog.backend_list); node; node = slist_next(node))
+    {
+        backend = container_of(node, mlog_backend_t, list);
+        if (!strcmp(backend->name, name))
+            return backend;
+    }
+    return NULL;
+}
+
 int mlog_backend_unregister(struct mlog_backend *backend)
 {
     return 0;
 }
 
+#if MLOG_USING_ASYNC_OUTPUT
+
+static void mlog_async_lock(void)
+{
+    extern void mlog_port_async_lock(void);
+    mlog_port_async_lock();
+}
+
+static void mlog_async_unlock(void)
+{
+    extern void mlog_port_async_unlock(void);
+    mlog_port_async_unlock();
+}
+
+static int mlog_async_buffer_data_size(void)
+{
+    return mlog.async_rb.write_index - mlog.async_rb.read_index;
+}
+
+static int mlog_async_buffer_space(void)
+{
+    return MLOG_ASYNC_LOG_BUF - mlog.async_rb.write_index;
+}
+
+static void *mlog_async_buf_alloc(size_t size)
+{
+    char *buf = NULL;
+    mlog_async_lock();
+    if (mlog_async_buffer_space() >= size)
+    {
+        buf = &mlog.async_rb.buf[mlog.async_rb.write_index];
+        mlog.async_rb.write_index += size;
+    }
+    mlog_async_unlock();
+    return buf;
+}
+
+static void *mlog_async_buf_peek(size_t size)
+{
+    char *buf = NULL;
+    mlog_async_lock();
+    if (mlog_async_buffer_data_size() > size)
+    {
+        buf = &mlog.async_rb.buf[mlog.async_rb.read_index];
+        mlog.async_rb.read_index += size;
+    }
+    else
+    {
+        mlog.async_rb.read_index = 0;
+        mlog.async_rb.write_index = 0;
+    }
+    mlog_async_unlock();
+    return buf;
+}
+
+void mlog_async_output(const char *name)
+{
+    struct mlog_frame *frame;
+    mlog_backend_t *backend = name ? mlog_backend_find(name) : NULL;
+    while ((frame = mlog_async_buf_peek(sizeof(struct mlog_frame))))
+    {
+        if (frame->magic == MLOG_FRAME_MAGIC)
+        {
+            const char *log_buf = mlog_async_buf_peek(frame->log_len);
+            if (log_buf == frame->log)
+            {
+                if (!backend)
+                    mlog_output_to_all_backend(frame->level, frame->tag, frame->log, frame->log_len);
+                else if (backend->output)
+                    backend->output(backend, frame->log, frame->log_len);
+            }
+        }
+    }
+}
+#endif
+
+
 int mlog_async_loop(void)
 {
+#if MLOG_USING_ASYNC_OUTPUT
     extern int mlog_port_async_wait(int time);
-    extern void mlog_port_async_notify(void);
     mlog_async_output(NULL);
     while (1)
     {
@@ -296,6 +386,6 @@ int mlog_async_loop(void)
             }
         }
     }
-
+#endif
     return -1;
 }

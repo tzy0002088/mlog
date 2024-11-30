@@ -27,8 +27,9 @@ void mlog_flush(void);
 void mlog_async_output(const char *name);
 
 /* 后端注册 */
-int mlog_backend_register(struct mlog_backend *backend, const char *name, int sup_color);
-int mlog_backend_unregister(struct mlog_backend *backend);
+int mlog_backend_register(mlog_backend_t *backend, const char *name, int sup_color);
+int mlog_backend_unregister(mlog_backend_t *backend);
+mlog_backend_t *mlog_backend_find(const char *name);
 
 #ifdef __cplusplus
 }
