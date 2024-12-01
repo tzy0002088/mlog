@@ -49,6 +49,8 @@ extern "C" {
 #define mlog_e(TAG, ...)
 #endif
 
+#define MLOG_FRAME_MAGIC        (0x68)
+
 typedef struct mlog_backend
 {
     char name[MLOG_BACKEND_NAME_MAX];
