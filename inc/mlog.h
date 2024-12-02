@@ -17,16 +17,15 @@ extern "C"{
 #define LOG_RAW(...)        mlog_raw(__VA_ARGS__)
 
 int mlog_init(void);
-int mlog_async_loop(void);
-
-
 void mlog_output(uint8_t level, const char *tag, const char *format, ...);
 void mlog_raw(const char *format, ...);
+
+/* async */
+void mlog_async_output(const char *name);
+int mlog_async_loop(void);
 void mlog_flush(void);
 
-void mlog_async_output(const char *name);
-
-/* 后端注册 */
+/* backend */
 int mlog_backend_register(mlog_backend_t *backend, const char *name, int sup_color);
 int mlog_backend_unregister(mlog_backend_t *backend);
 mlog_backend_t *mlog_backend_find(const char *name);

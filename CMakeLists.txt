@@ -20,7 +20,7 @@ include_directories(
 # Define source files
 set(SOURCES
     src/mlog.c
-    port/mlog_port.c
+    port/mlog_pthread_port.c
     backend/console_be.c
     main.c
 )

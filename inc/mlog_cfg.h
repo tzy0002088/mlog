@@ -7,5 +7,7 @@
 #define MLOG_USING_ASYNC_OUTPUT     (1)
 #define MLOG_USING_FILTER           (1)
 #define MLOG_OUTPUT_THREAD_NAME     (1)
+#define MLOG_USING_ISR_LOG          (1)
+
 
 #endif //__MLOG_CFG_H__

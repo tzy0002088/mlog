@@ -15,7 +15,8 @@ extern "C" {
 #define LOG_LVL_WARNING     1
 #define LOG_LVL_ERROR       0
 
-#define LOG_FILTER_LVL_ALL  LOG_LVL_DBG
+#define LOG_FILTER_LVL_ALL          LOG_LVL_DBG
+#define LOG_ASYNC_WAITING_FOREVER   -1
 
 #ifndef LOG_LVL
 #define LOG_LVL       LOG_LVL_WARNING
