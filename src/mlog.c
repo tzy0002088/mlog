@@ -143,6 +143,7 @@ static void mlog_output_to_all_backend(uint8_t level, const char *tag, char *log
                     drop_len = strlen(level_to_color[level]) + strlen(CSI_START);
                     log_buf += drop_len;
                     log_len -= (drop_len + strlen(CSI_END));
+                    log_buf[log_len] = '\0';
                 }
                 backend->output(backend, log_buf, log_len);
             }
@@ -215,14 +216,11 @@ void mlog_async_output(const char *name)
     {
         if (frame->magic == MLOG_FRAME_MAGIC)
         {
-            const char *log_buf = mlog_async_get_frame(MLOG_ALIGN(frame->log_len, 4));
-            if (log_buf == frame->log)
-            {
-                if (!backend)
-                    mlog_output_to_all_backend(frame->level, frame->tag, frame->log, frame->log_len);
-                else if (backend->output)
-                    backend->output(backend, frame->log, frame->log_len);
-            }
+            if (!backend)
+                mlog_output_to_all_backend(frame->level, frame->tag, frame->log, frame->log_len);
+            else if (backend->output)
+                backend->output(backend, frame->log, frame->log_len);
+            mlog_async_get_frame(MLOG_ALIGN(frame->log_len, 4));
         }
     }
 }
