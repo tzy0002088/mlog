@@ -12,6 +12,7 @@
 static pthread_t tid_1;
 static pthread_t tid_2;
 static pthread_t tid_3;
+static pthread_t tid_4;
 
 static void *test_thead(void *prma)
 {
@@ -22,7 +23,7 @@ static void *test_thead(void *prma)
         LOG_E("LOG_E %s.", (char *)prma);
         LOG_D("LOG_D %s.", (char *)prma);
         LOG_RAW("LOG_RAW %s.\n", (char *)prma);
-        usleep(1000);
+        usleep(2000);
     }
     return NULL;
 }
@@ -42,6 +43,7 @@ int main(void)
     pthread_create(&tid_1, NULL, test_thead, "tid_1");
     pthread_create(&tid_2, NULL, test_thead, "tid_2");
     pthread_create(&tid_3, NULL, test_thead, "tid_3");
+    pthread_create(&tid_4, NULL, test_thead, "tid_4");
 
     while(1)
     {
@@ -50,7 +52,7 @@ int main(void)
         LOG_E("LOG_E %d.", count++);
         LOG_D("LOG_D %d.", count++);
         LOG_RAW("LOG_RAW %d.\n", count++);
-        usleep(1000);
+        usleep(100);
     }
 
     return 0;

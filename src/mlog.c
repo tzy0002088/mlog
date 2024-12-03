@@ -167,12 +167,12 @@ static void mlog_async_unlock(void)
     mlog_port_async_unlock();
 }
 
-static int mlog_async_buffer_data_size(void)
+static inline int mlog_async_buffer_data_size(void)
 {
     return mlog.async_buf.write_index - mlog.async_buf.read_index;
 }
 
-static int mlog_async_buffer_space(void)
+static inline int mlog_async_buffer_space(void)
 {
     return MLOG_ASYNC_LOG_BUF - mlog.async_buf.write_index;
 }
@@ -181,24 +181,23 @@ static int mlog_async_put_frame(size_t size, struct mlog_frame *frame)
 {
     int ret = -1;
     struct mlog_frame *log_frame = NULL;
-    mlog_async_lock();
     if (mlog_async_buffer_space() >= size)
     {
+        mlog_async_lock();
         log_frame = (struct mlog_frame *)&mlog.async_buf.buf[mlog.async_buf.write_index];
         *log_frame = *frame;
         log_frame->log = (char *)log_frame + sizeof (struct mlog_frame);
-        strncpy(log_frame->log, frame->log,  frame->log_len);
+        strncpy(log_frame->log, frame->log, frame->log_len);
         mlog.async_buf.write_index += size;
+        mlog_async_unlock();
         ret = 0;
     }
-    mlog_async_unlock();
     return ret;
 }
 
 static void *mlog_async_get_frame(size_t size)
 {
     char *buf = NULL;
-    mlog_async_lock();
     if (mlog_async_buffer_data_size() >= size)
     {
         buf = &mlog.async_buf.buf[mlog.async_buf.read_index];
@@ -207,9 +206,10 @@ static void *mlog_async_get_frame(size_t size)
     else
     {
         mlog.async_buf.read_index = 0;
+        mlog_async_lock();
         mlog.async_buf.write_index = 0;
+        mlog_async_unlock();
     }
-    mlog_async_unlock();
     return buf;
 }
 
@@ -324,10 +324,10 @@ void mlog_output(uint32_t level, const char *tag, const char *format, ...)
         va_start(args, format);
         mlog_lock();
         fmt_len = mlog_formater(level, tag, log_buf, format, args);
-        va_end(args);
         if (fmt_len > 0 && fmt_len <= MLOG_LINE_MAX_SIZE)
             mlog_do_output(level, tag, log_buf, fmt_len + 1); // Allocate an extra byte terminator
         mlog_unlock();
+        va_end(args);
     }
 }
 
@@ -343,10 +343,10 @@ void mlog_raw(const char *format, ...)
         va_start(args, format);
         mlog_lock();
         fmt_len = vsnprintf(log_buf, MLOG_LINE_MAX_SIZE, format, args);
-        va_end(args);
         if (fmt_len > 0 && fmt_len <= MLOG_LINE_MAX_SIZE)
             mlog_do_output(LOG_LVL_DBG, "", log_buf, fmt_len + 1); // Allocate an extra byte terminator
         mlog_unlock();
+        va_end(args);
     }
 }
 
