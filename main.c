@@ -7,7 +7,7 @@
 
 #define LOG_LVL     LOG_LVL_DBG
 #define LOG_TAG     "main"
-#include "tslog.h"
+#include "mlog.h"
 
 static pthread_t tid_1;
 static pthread_t tid_2;
