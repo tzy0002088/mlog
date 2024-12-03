@@ -143,11 +143,12 @@ static void mlog_output_to_all_backend(uint8_t level, const char *tag, char *log
             }
             else
             {
+                log_len -= 1;
                 if (level_to_color[level])
                 {
                     drop_len = strlen(level_to_color[level]) + strlen(CSI_START);
                     log_buf += drop_len;
-                    log_len -= (drop_len + strlen(CSI_END) + 1);
+                    log_len -= (drop_len + strlen(CSI_END));
                     log_buf[log_len] = '\0';
                 }
                 backend->output(backend, log_buf, log_len);
@@ -258,14 +259,15 @@ static int mlog_head_formater(uint8_t level, const char *tag, char *log_buf)
 static int mlog_tail_formater(uint8_t level, char *log_buf, size_t fmt_len)
 {
     int old_fmt = fmt_len;
-    if (level_to_color[level])
-    {
-        MLOG_FORMAT_STR(log_buf + fmt_len, "%s", CSI_END);
-    }
 
 #if MLOG_OUTPUT_NEWLINE
     MLOG_FORMAT_STR(log_buf + fmt_len, "%s", MLOG_NEWLINE_SIGN);
 #endif
+
+    if (level_to_color[level])
+    {
+        MLOG_FORMAT_STR(log_buf + fmt_len, "%s", CSI_END);
+    }
 
     log_buf[fmt_len] = '\0';
     return fmt_len - old_fmt;

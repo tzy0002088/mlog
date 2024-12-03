@@ -23,7 +23,7 @@ static void *test_thead(void *prma)
         LOG_E("LOG_E %s.", (char *)prma);
         LOG_D("LOG_D %s.", (char *)prma);
         LOG_RAW("LOG_RAW %s.\n", (char *)prma);
-        usleep(2000);
+        usleep(200);
     }
     return NULL;
 }
