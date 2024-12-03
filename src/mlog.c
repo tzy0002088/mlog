@@ -143,7 +143,6 @@ static void mlog_output_to_all_backend(uint8_t level, const char *tag, char *log
                     drop_len = strlen(level_to_color[level]) + strlen(CSI_START);
                     log_buf += drop_len;
                     log_len -= (drop_len + strlen(CSI_END));
-                    log_buf[log_len] = '\0';
                 }
                 backend->output(backend, log_buf, log_len);
             }
@@ -252,6 +251,7 @@ static int mlog_tail_formater(uint8_t level, char *log_buf, size_t log_len)
     {
         MLOG_FORMAT_STR(log_buf + log_len, MLOG_LINE_MAX_SIZE, "%s", CSI_END);
     }
+    log_buf[fmt_len + log_len] = '\0';
     return fmt_len;
 }
 
@@ -308,7 +308,7 @@ void mlog_output(uint8_t level, const char *tag, const char *format, ...)
     log_len = mlog_formater(level, tag, log_buf, format, args);
     va_end(args);
     if (log_len > 0 && log_len <= MLOG_LINE_MAX_SIZE)
-        mlog_do_output(level, tag, log_buf, log_len);
+        mlog_do_output(level, tag, log_buf, log_len + 1);
     mlog_unlock();
 }
 
@@ -324,7 +324,7 @@ void mlog_raw(const char *format, ...)
     fmt_len = vsnprintf(log_buf, MLOG_LINE_MAX_SIZE, format, args);
     va_end(args);
     if (fmt_len > 0 && fmt_len <= MLOG_LINE_MAX_SIZE)
-        mlog_do_output(LOG_LVL_DBG, "", log_buf, fmt_len);
+        mlog_do_output(LOG_LVL_DBG, "", log_buf, fmt_len + 1);
     mlog_unlock();
 }
 
