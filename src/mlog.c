@@ -1,5 +1,7 @@
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #include "mlog.h"
 #include "mlog_list.h"
 
@@ -31,8 +33,8 @@ struct mlog
     char log_buf_isr[MLOG_LINE_MAX_SIZE + 1];
     struct
     {
-        int level;
-        char *tag;
+        uint32_t level;
+        char tag[MLOG_FILTER_TAG_MAX + 1];
     } filter;
     slist_t backend_list;
 #if MLOG_USING_ASYNC_OUTPUT
@@ -40,11 +42,13 @@ struct mlog
 #endif
 };
 
+#define MLOG_FRAME_MAGIC                  (0x68)
+#define MLOG_NEWLINE_SIGN                 ("\n")
 #define MLOG_ALIGN(size, align)           (((size) + (align) - 1) & ~((align) - 1))
 
-#define MLOG_FORMAT_STR(dst, size, fmt, ...)          \
+#define MLOG_FORMAT_STR(dst, fmt, ...)          \
 do {                                                  \
-    int len = snprintf(dst, size, fmt, __VA_ARGS__);  \
+    int len = snprintf(dst, MLOG_LINE_MAX_SIZE - fmt_len, fmt, __VA_ARGS__);  \
     if (len < 0) {                                    \
         return -1;                                    \
     }                                                 \
@@ -94,16 +98,6 @@ static const char *level_to_info[] = {
     "D/",
 };
 
-extern int mlog_port_in_isr(void);
-extern void mlog_port_lock(void);
-extern void mlog_port_unlock(void);
-extern void mlog_port_async_lock(void);
-extern void mlog_port_async_unlock(void);
-extern const char *mlog_port_thread_name(void);
-extern void mlog_port_async_notify(void);
-extern int mlog_port_async_wait(int time);
-extern void mlog_port_init(void);
-
 static void mlog_lock(void)
 {
     mlog_port_lock();
@@ -117,9 +111,17 @@ static void mlog_unlock(void)
 static char *mlog_get_log_buf(void)
 {
     if (!mlog_port_in_isr())
+    {
         return mlog.log_buf_th;
+    }
     else
+    {
+#if MLOG_USING_ISR_LOG
         return mlog.log_buf_isr;
+#else
+        return NULL;
+#endif
+    }
 }
 
 static void mlog_output_to_all_backend(uint8_t level, const char *tag, char *log_buf, size_t log_len)
@@ -132,6 +134,9 @@ static void mlog_output_to_all_backend(uint8_t level, const char *tag, char *log
         backend = container_of(node, mlog_backend_t, list);
         if (backend->output)
         {
+            if (backend->filter && !backend->filter(backend, tag, level))
+                continue;
+
             if (backend->sup_color)
             {
                 backend->output(backend, log_buf, log_len);
@@ -142,7 +147,8 @@ static void mlog_output_to_all_backend(uint8_t level, const char *tag, char *log
                 {
                     drop_len = strlen(level_to_color[level]) + strlen(CSI_START);
                     log_buf += drop_len;
-                    log_len -= (drop_len + strlen(CSI_END));
+                    log_len -= (drop_len + strlen(CSI_END) + 1);
+                    log_buf[log_len] = '\0';
                 }
                 backend->output(backend, log_buf, log_len);
             }
@@ -219,6 +225,7 @@ void mlog_async_output(const char *name)
                 mlog_output_to_all_backend(frame->level, frame->tag, frame->log, frame->log_len);
             else if (backend->output)
                 backend->output(backend, frame->log, frame->log_len);
+            /* release log buffer */
             mlog_async_get_frame(MLOG_ALIGN(frame->log_len, 4));
         }
     }
@@ -231,44 +238,53 @@ static int mlog_head_formater(uint8_t level, const char *tag, char *log_buf)
 
     if (level_to_color[level])
     {
-        MLOG_FORMAT_STR(log_buf, MLOG_LINE_MAX_SIZE, "%s", CSI_START);
-        MLOG_FORMAT_STR(log_buf + fmt_len, MLOG_LINE_MAX_SIZE, "%s", level_to_color[level]);
+        MLOG_FORMAT_STR(log_buf, "%s", CSI_START);
+        MLOG_FORMAT_STR(log_buf + fmt_len, "%s", level_to_color[level]);
     }
-    MLOG_FORMAT_STR(log_buf + fmt_len, MLOG_LINE_MAX_SIZE, "[%s%s] ", level_to_info[level], tag);
+    MLOG_FORMAT_STR(log_buf + fmt_len, "[%s%s]", level_to_info[level], tag);
 
 #if MLOG_OUTPUT_THREAD_NAME
-    MLOG_FORMAT_STR(log_buf + fmt_len, MLOG_LINE_MAX_SIZE, "%s", mlog_port_thread_name());
+    MLOG_FORMAT_STR(log_buf + fmt_len, " %s", mlog_port_thread_name());
 #endif
 
-    MLOG_FORMAT_STR(log_buf + fmt_len, MLOG_LINE_MAX_SIZE, "%s", ": ");
+#if MLOG_OUTPUT_TIME
+    MLOG_FORMAT_STR(log_buf + fmt_len, " %s", mlog_port_time());
+#endif
+
+    MLOG_FORMAT_STR(log_buf + fmt_len, "%s", ": ");
     return fmt_len;
 }
 
-static int mlog_tail_formater(uint8_t level, char *log_buf, size_t log_len)
+static int mlog_tail_formater(uint8_t level, char *log_buf, size_t fmt_len)
 {
-    int fmt_len = 0;
+    int old_fmt = fmt_len;
     if (level_to_color[level])
     {
-        MLOG_FORMAT_STR(log_buf + log_len, MLOG_LINE_MAX_SIZE, "%s", CSI_END);
+        MLOG_FORMAT_STR(log_buf + fmt_len, "%s", CSI_END);
     }
-    log_buf[fmt_len + log_len] = '\0';
-    return fmt_len;
+
+#if MLOG_OUTPUT_NEWLINE
+    MLOG_FORMAT_STR(log_buf + fmt_len, "%s", MLOG_NEWLINE_SIGN);
+#endif
+
+    log_buf[fmt_len] = '\0';
+    return fmt_len - old_fmt;
 }
 
-static int mlog_formater(uint8_t level, const char *tag, char *log_buf, const char *format, va_list args)
+static int mlog_formater(uint32_t level, const char *tag, char *log_buf, const char *format, va_list args)
 {
     int head_len = -1, log_len = -1, tail_len = -1;
 
     head_len = mlog_head_formater(level, tag, log_buf);
     if (head_len > 0)
-        log_len = vsnprintf(log_buf + head_len, MLOG_LINE_MAX_SIZE, format, args);
+        log_len = vsnprintf(log_buf + head_len, MLOG_LINE_MAX_SIZE - head_len, format, args);
     if (log_len > 0)
         tail_len =  mlog_tail_formater(level, log_buf, head_len + log_len);
 
     return tail_len >= 0 ? head_len + log_len + tail_len : -1;
 }
 
-static void mlog_do_output(uint8_t level, const char *tag, char *log_buf, size_t log_len)
+static void mlog_do_output(uint32_t level, const char *tag, char *log_buf, size_t log_len)
 {
 #if MLOG_USING_ASYNC_OUTPUT
     struct mlog_frame log_frame;
@@ -288,10 +304,10 @@ static void mlog_do_output(uint8_t level, const char *tag, char *log_buf, size_t
 #endif
 }
 
-void mlog_output(uint8_t level, const char *tag, const char *format, ...)
+void mlog_output(uint32_t level, const char *tag, const char *format, ...)
 {
     va_list args;
-    int log_len = 0;
+    int fmt_len = 0;
     char *log_buf = NULL;
 
     if (!mlog.is_init)
@@ -299,40 +315,45 @@ void mlog_output(uint8_t level, const char *tag, const char *format, ...)
 #if MLOG_USING_FILTER
     if (level > mlog.filter.level)
         return;
-    else if (mlog.filter.tag && !strcmp(tag, mlog.filter.tag))
+    else if (strstr(mlog.filter.tag, tag))
         return;
 #endif
     log_buf = mlog_get_log_buf();
-    mlog_lock();
-    va_start(args, format);
-    log_len = mlog_formater(level, tag, log_buf, format, args);
-    va_end(args);
-    if (log_len > 0 && log_len <= MLOG_LINE_MAX_SIZE)
-        mlog_do_output(level, tag, log_buf, log_len + 1);
-    mlog_unlock();
+    if (log_buf)
+    {
+        va_start(args, format);
+        mlog_lock();
+        fmt_len = mlog_formater(level, tag, log_buf, format, args);
+        va_end(args);
+        if (fmt_len > 0 && fmt_len <= MLOG_LINE_MAX_SIZE)
+            mlog_do_output(level, tag, log_buf, fmt_len + 1); // Allocate an extra byte terminator
+        mlog_unlock();
+    }
 }
 
 void mlog_raw(const char *format, ...)
 {
-    char *log_buf = NULL;
-    int fmt_len = 0;
     va_list args;
-    log_buf = mlog_get_log_buf();
+    int fmt_len = 0;
+    char *log_buf = NULL;
 
-    mlog_lock();
-    va_start(args, format);
-    fmt_len = vsnprintf(log_buf, MLOG_LINE_MAX_SIZE, format, args);
-    va_end(args);
-    if (fmt_len > 0 && fmt_len <= MLOG_LINE_MAX_SIZE)
-        mlog_do_output(LOG_LVL_DBG, "", log_buf, fmt_len + 1);
-    mlog_unlock();
+    log_buf = mlog_get_log_buf();
+    if (log_buf)
+    {
+        va_start(args, format);
+        mlog_lock();
+        fmt_len = vsnprintf(log_buf, MLOG_LINE_MAX_SIZE, format, args);
+        va_end(args);
+        if (fmt_len > 0 && fmt_len <= MLOG_LINE_MAX_SIZE)
+            mlog_do_output(LOG_LVL_DBG, "", log_buf, fmt_len + 1); // Allocate an extra byte terminator
+        mlog_unlock();
+    }
 }
 
 void mlog_flush(void)
 {
     slist_t *node;
     mlog_backend_t *backend;
-    /* lock */
     for (node = slist_first(&mlog.backend_list); node; node = slist_next(node))
     {
         backend = container_of(node, mlog_backend_t, list);
@@ -348,7 +369,6 @@ int mlog_backend_register(struct mlog_backend *backend, const char *name, int su
     strncpy(backend->name, name, MLOG_BACKEND_NAME_MAX);
     backend->sup_color = sup_color;
     slist_init(&backend->list);
-    /* lock */
     slist_append(&mlog.backend_list, &backend->list);
 
     return 0;
@@ -356,6 +376,9 @@ int mlog_backend_register(struct mlog_backend *backend, const char *name, int su
 
 int mlog_backend_unregister(struct mlog_backend *backend)
 {
+    if (backend->deinit)
+        backend->deinit(backend);
+    slist_remove(&mlog.backend_list, &backend->list);
     return 0;
 }
 
@@ -397,10 +420,20 @@ int mlog_async_loop(void)
     return -1;
 }
 
+void mlog_global_filter_level_set(uint32_t level)
+{
+    mlog.filter.level = level;
+}
+
+void mlog_global_filter_tag_set(const char *tag)
+{
+    strncpy(mlog.filter.tag, tag, MLOG_FILTER_TAG_MAX);
+}
+
 int mlog_init(void)
 {
     if (mlog.is_init)
-        return 0 ;
+        return 0;
 
     mlog_port_init();
     slist_init(&mlog.backend_list);

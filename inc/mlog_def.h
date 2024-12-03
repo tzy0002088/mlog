@@ -50,7 +50,13 @@ extern "C" {
 #define mlog_e(TAG, ...)
 #endif
 
-#define MLOG_FRAME_MAGIC        (0x68)
+/*
+TODO: hexdump support
+00000000  7f 45 4c 46 02 01 01 00  00 00 00 00 00 00 00 00  |.ELF............|
+00000010  03 00 3e 00 01 00 00 00  80 35 00 00 00 00 00 00  |..>......5......|
+00000020  40 00                                             |@.|
+*/
+#define mlog_hex(TAG, ...)
 
 typedef struct mlog_backend
 {
@@ -58,6 +64,8 @@ typedef struct mlog_backend
     int sup_color;
     int (*init)(struct mlog_backend *backend);
     int (*output)(struct mlog_backend *backend, const char *log, size_t length);
+    /* Backend filter, If 0 is returned, it is considered necessary to filter the log */
+    int (*filter)(struct mlog_backend *backend, const char *tag, unsigned int level);
     int (*flush)(struct mlog_backend *backend);
     int (*deinit)(struct mlog_backend *backend);
     slist_t list;

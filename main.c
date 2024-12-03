@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include <stdio.h>
 #include <time.h>
 #include <unistd.h>
@@ -16,13 +17,12 @@ static void *test_thead(void *prma)
 {
     while (1)
     {
-        LOG_I("LOG_I %s.\n", (char *)prma);
-        LOG_W("LOG_W %s.\n", (char *)prma);
-        LOG_E("LOG_E %s.\n", (char *)prma);
-        LOG_D("LOG_D %s.\n", (char *)prma);
+        LOG_I("LOG_I %s.", (char *)prma);
+        LOG_W("LOG_W %s.", (char *)prma);
+        LOG_E("LOG_E %s.", (char *)prma);
+        LOG_D("LOG_D %s.", (char *)prma);
         LOG_RAW("LOG_RAW %s.\n", (char *)prma);
         usleep(1000);
-        //sleep(1);
     }
     return NULL;
 }
@@ -34,10 +34,10 @@ int main(void)
     mlog_init();
     mlog_console_be_init();
 
-    LOG_I("LOG_I.\n");
-    LOG_W("LOG_W.\n");
-    LOG_E("LOG_E.\n");
-    LOG_D("LOG_D.\n");
+    LOG_I("LOG_I.");
+    LOG_W("LOG_W.");
+    LOG_E("LOG_E.");
+    LOG_D("LOG_D.");
 
     pthread_create(&tid_1, NULL, test_thead, "tid_1");
     pthread_create(&tid_2, NULL, test_thead, "tid_2");
@@ -45,10 +45,10 @@ int main(void)
 
     while(1)
     {
-        LOG_I("LOG_I %d.\n", count++);
-        LOG_W("LOG_W %d.\n", count++);
-        LOG_E("LOG_E %d.\n", count++);
-        LOG_D("LOG_D %d.\n", count++);
+        LOG_I("LOG_I %d.", count++);
+        LOG_W("LOG_W %d.", count++);
+        LOG_E("LOG_E %d.", count++);
+        LOG_D("LOG_D %d.", count++);
         LOG_RAW("LOG_RAW %d.\n", count++);
         usleep(1000);
     }

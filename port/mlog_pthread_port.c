@@ -1,6 +1,7 @@
 #include <pthread.h>
 #include <semaphore.h>
-#include <errno.h>
+#include <stdio.h>
+#include <time.h>
 #include "mlog.h"
 
 static pthread_t tid;
@@ -52,7 +53,19 @@ int mlog_port_in_isr(void)
 
 const char *mlog_port_thread_name(void)
 {
-    return "workqueue";
+    static char buffer[24];
+    snprintf(buffer, 24, "tid: %u", (unsigned int)pthread_self());
+    return buffer;
+}
+
+const char *mlog_port_time(void)
+{
+    static char time_buf[20];
+    struct tm tm;
+    time_t cur_time = time(NULL);
+    localtime_r(&cur_time, &tm);
+    snprintf(time_buf, 40, "%02d-%02d %02d:%02d:%02d", tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+    return time_buf;
 }
 
 static void sem_reset(sem_t* sem)

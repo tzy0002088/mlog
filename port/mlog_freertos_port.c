@@ -7,10 +7,10 @@
 #include <assert.h>
 #include <stddef.h>
 
-static SemaphoreHandle_t line_buffer_lock;
+static SemaphoreHandle_t sync_buffer_lock;
 static SemaphoreHandle_t async_lock;
 static SemaphoreHandle_t async_signal;
-static int irq_lock_level = 0;
+static int sync_irq_lock_level = 0;
 static int async_irq_lock_level = 0;
 
 int mlog_port_in_isr(void);
@@ -19,12 +19,12 @@ void mlog_port_lock(void)
 {
     if (!mlog_port_in_isr())
     {
-        xSemaphoreTake(line_buffer_lock, portMAX_DELAY);
+        xSemaphoreTake(sync_buffer_lock, portMAX_DELAY);
     }
     else
     {
 #if MLOG_USING_ISR_LOG
-        irq_lock_level = vPortSetInterruptMask();
+        sync_irq_lock_level = vPortSetInterruptMask();
 #endif
     }
 }
@@ -33,12 +33,12 @@ void mlog_port_unlock(void)
 {
     if (!mlog_port_in_isr())
     {
-        xSemaphoreGive(line_buffer_lock);
+        xSemaphoreGive(sync_buffer_lock);
     }
     else
     {
 #if MLOG_USING_ISR_LOG
-        vPortClearInterruptMask(irq_lock_level);
+        vPortClearInterruptMask(sync_irq_lock_level);
 #endif
     }
 }
@@ -67,22 +67,31 @@ static void mlog_async_entry(void *prma)
     vTaskDelete(NULL);
 }
 
-int mlog_port_init(void)
+void mlog_port_init(void)
 {
     BaseType_t xTask;
 
-    line_buffer_lock = xSemaphoreCreateMutex();
-#if MLOG_USING_ISR_LOG
+    sync_buffer_lock = xSemaphoreCreateMutex();
+    assert(sync_buffer_lock);
+
+#if !MLOG_USING_ISR_LOG
     async_lock = xSemaphoreCreateMutex();
     assert(async_lock);
 #endif
+
+#if MLOG_USING_ASYNC_OUTPUT
     async_signal = xSemaphoreCreateBinary();
-    assert(line_buffer_lock && async_signal);
+    assert(async_signal);
 
     xTask = xTaskCreate(mlog_async_entry, "mlog_async", configMINIMAL_STACK_SIZE * 2,
                         NULL, tskIDLE_PRIORITY + 1, NULL);
     assert(xTask == pdPASS);
-    return 0;
+#endif
+}
+
+const char *mlog_port_time(void)
+{
+    return "12-03 19:02:03";
 }
 
 int mlog_port_in_isr(void)
