@@ -124,6 +124,17 @@ static char *mlog_get_log_buf(void)
     }
 }
 
+#if !MLOG_USING_ASYNC_OUTPUT
+static void mlog_output_to_console(char *log_buf, size_t log_len)
+{
+    mlog_backend_t *backend = mlog_backend_find("console");
+    if (backend && backend->output)
+    {
+        backend->output(backend, log_buf, log_len);
+    }
+}
+#endif
+
 static void mlog_output_to_all_backend(uint8_t level, const char *tag, char *log_buf, size_t log_len)
 {
     size_t drop_len;
@@ -302,7 +313,10 @@ static void mlog_do_output(uint32_t level, const char *tag, char *log_buf, size_
         mlog_port_async_notify();
     }
 #else
-    mlog_output_to_all_backend(level, tag, log_buf, log_len);
+    if (!mlog_port_in_isr())
+        mlog_output_to_all_backend(level, tag, log_buf, log_len);
+    else
+        mlog_output_to_console(log_buf, log_len);
 #endif
 }
 
@@ -391,7 +405,7 @@ mlog_backend_t *mlog_backend_find(const char *name)
     for (node = slist_first(&mlog.backend_list); node; node = slist_next(node))
     {
         backend = container_of(node, mlog_backend_t, list);
-        if (!strcmp(backend->name, name))
+        if (!strncmp(backend->name, name, MLOG_BACKEND_NAME_MAX))
             return backend;
     }
     return NULL;
@@ -413,6 +427,7 @@ int mlog_async_loop(void)
             }
             else
             {
+                /* When the system is idle, refresh the backend, such as refreshing the file system */
                 mlog_flush();
                 break;
             }

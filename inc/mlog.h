@@ -35,6 +35,7 @@ void mlog_global_filter_tag_set(const char *tag);
 int mlog_port_in_isr(void);
 void mlog_port_lock(void);
 void mlog_port_unlock(void);
+/* Asynchronous buffer lock to avoid using the same lock as the print thread */
 void mlog_port_async_lock(void);
 void mlog_port_async_unlock(void);
 const char *mlog_port_thread_name(void);
