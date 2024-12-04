@@ -21,7 +21,7 @@ extern "C"{
 #define LOG_E(...)          mlog_e(LOG_TAG, __VA_ARGS__)
 #define LOG_D(...)          mlog_d(LOG_TAG, __VA_ARGS__)
 #define LOG_RAW(...)        mlog_raw(__VA_ARGS__)
-#define LOG_HEX(buf, len)   mlog_hex(LOG_TAG, buf, len)
+#define LOG_HEX(tag, buf, len)   mlog_hex(tag, buf, len)
 
 /* init */
 int mlog_init(void);

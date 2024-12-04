@@ -30,12 +30,11 @@ static void *test_thead(void *prma)
     {
         hex_buf[i] = i + 'A';
     }
+    int len = snprintf((char *)hex_buf, 1, "1");
 
     while (1)
     {
-        LOG_HEX(hex_buf, 40);
-        LOG_HEX(hex_buf, 20);
-        LOG_HEX(hex_buf, 17);
+        LOG_HEX("ble_rx", hex_buf, 40);
         LOG_I("LOG_I %s.", (char *)prma);
         LOG_W("LOG_W %s.", (char *)prma);
         LOG_E("LOG_E %s.", (char *)prma);

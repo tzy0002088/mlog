@@ -57,10 +57,12 @@ struct mlog
 #define MLOG_FORMAT_STR(dst, fmt, ...)          \
 do {                                                  \
     int len = snprintf(dst + fmt_len, MLOG_LINE_MAX_SIZE - fmt_len, fmt, __VA_ARGS__);  \
-    if (len < 0) {                                    \
-        return -1;                                    \
+    if (len > -1 && len <= (MLOG_LINE_MAX_SIZE - fmt_len)) {                                    \
+        fmt_len += len;                                    \
     }                                                 \
-    fmt_len += len;                                   \
+    else {  \
+        fmt_len = MLOG_LINE_MAX_SIZE; \
+    } \
 } while(0)
 
 static struct mlog mlog = {0};
