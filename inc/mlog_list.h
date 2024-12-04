@@ -1,3 +1,11 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Change Logs:
+ * Date           Author       Notes
+ * 2024-11-28      tzy          first implementation
+ */
+
 #ifndef __MLOG_LIST_H__
 #define __MLOG_LIST_H__
 

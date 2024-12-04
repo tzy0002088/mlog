@@ -1,3 +1,11 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Change Logs:
+ * Date           Author       Notes
+ * 2024-11-27      tzy          first implementation
+ */
+
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>

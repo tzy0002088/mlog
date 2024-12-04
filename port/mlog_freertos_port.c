@@ -1,3 +1,10 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Change Logs:
+ * Date           Author       Notes
+ * 2024-12-2      tzy          first implementation
+ */
 
 #include "core_riscv32.h"
 #include "mlog.h"
