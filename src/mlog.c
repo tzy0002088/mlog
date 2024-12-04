@@ -355,14 +355,79 @@ void mlog_output(uint32_t level, const char *tag, const char *format, ...)
     }
 }
 
-/*
-TODO: hexdump support
-[tag]: 00000000  7f 45 4c 46 02 01 01 00  00 00 00 00 00 00 00 00  |.ELF............|
-[tag]: 00000010  03 00 3e 00 01 00 00 00  20 35 00 00 00 00 00 00  |..>..... 5......|
-[tag]: 00000020
-*/
+static int mlog_hex_formater(const char *tag, char *log_buf, uint8_t *src_buf, size_t src_len)
+{
+#define __is_print_sign(ch)       ((unsigned int)((ch) - ' ') < (127u - ' '))
+    int loop = src_len / 16;
+    int remain = src_len % 16;
+    int fmt_len = 0;
+    int addr = 0;
+    uint8_t *tmp_buf = src_buf;
+
+    while(loop--)
+    {
+        MLOG_FORMAT_STR(log_buf, "[%s]: %08X  ", tag, addr);
+        for (int i = 0; i < 16; i++)
+        {
+            if (i != 7)
+            {
+                MLOG_FORMAT_STR(log_buf, "%02X ", *src_buf++);
+            }
+            else
+            {
+                MLOG_FORMAT_STR(log_buf, "%02X  ", *src_buf++);
+            }
+        }
+        addr += 16;
+        MLOG_FORMAT_STR(log_buf, "%s", " |");
+
+        for (int j = 0; j < 16; j++)
+        {
+            MLOG_FORMAT_STR(log_buf, "%c", __is_print_sign(tmp_buf[j]) ? tmp_buf[j] : '.');
+        }
+        MLOG_FORMAT_STR(log_buf, "%s", "|\n");
+        tmp_buf = src_buf;
+    }
+
+    /* Non aligned parts */
+    MLOG_FORMAT_STR(log_buf, "[%s]: %08X  ", tag, addr);
+    for (int j = 0; j < 16; j++)
+    {
+        if (j < remain)
+        {
+            MLOG_FORMAT_STR(log_buf, "%02X ", *src_buf++);
+        }
+        else
+        {
+            MLOG_FORMAT_STR(log_buf, "%s", "   ");
+        }
+
+        if (j == 7)
+            MLOG_FORMAT_STR(log_buf, "%s", " ");
+    }
+    MLOG_FORMAT_STR(log_buf, "%s", " |");
+
+    for (int j = 0; j < remain; j++)
+    {
+        MLOG_FORMAT_STR(log_buf, "%c", __is_print_sign(tmp_buf[j]) ? tmp_buf[j] : '.');
+    }
+    MLOG_FORMAT_STR(log_buf, "%s", "|\n");
+
+    return fmt_len;
+}
+
 void mlog_hexdump(const char *tag, uint8_t *buf, size_t len)
 {
+    int fmt_len = 0;
+    char *log_buf = mlog_get_log_buf();
+    if (log_buf)
+    {
+        mlog_lock();
+        fmt_len = mlog_hex_formater(tag, log_buf, buf, len);
+        if (fmt_len > 0 && fmt_len <= MLOG_LINE_MAX_SIZE)
+            mlog_do_output(LOG_LVL_DBG, "", log_buf, fmt_len + 1);
+        mlog_unlock();
+    }
 }
 
 void mlog_raw(const char *format, ...)

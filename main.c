@@ -25,8 +25,17 @@ static pthread_t tid_4;
 
 static void *test_thead(void *prma)
 {
+    uint8_t hex_buf[40];
+    for (int i = 0; i < 40; i++)
+    {
+        hex_buf[i] = i + 'A';
+    }
+
     while (1)
     {
+        LOG_HEX(hex_buf, 40);
+        LOG_HEX(hex_buf, 20);
+        LOG_HEX(hex_buf, 17);
         LOG_I("LOG_I %s.", (char *)prma);
         LOG_W("LOG_W %s.", (char *)prma);
         LOG_E("LOG_E %s.", (char *)prma);
@@ -40,16 +49,9 @@ static void *test_thead(void *prma)
 int main(void)
 {
     int count = 0;
-    uint8_t hex_buf[32];
     extern int mlog_console_be_init(void);
     mlog_init();
     mlog_console_be_init();
-
-    LOG_I("LOG_I.");
-    LOG_W("LOG_W.");
-    LOG_E("LOG_E.");
-    LOG_D("LOG_D.");
-    LOG_HEX(hex_buf, 32);
 
     pthread_create(&tid_1, NULL, test_thead, "tid_1");
     pthread_create(&tid_2, NULL, test_thead, "tid_2");
