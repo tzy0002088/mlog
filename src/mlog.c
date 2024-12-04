@@ -56,7 +56,7 @@ struct mlog
 
 #define MLOG_FORMAT_STR(dst, fmt, ...)          \
 do {                                                  \
-    int len = snprintf(dst, MLOG_LINE_MAX_SIZE - fmt_len, fmt, __VA_ARGS__);  \
+    int len = snprintf(dst + fmt_len, MLOG_LINE_MAX_SIZE - fmt_len, fmt, __VA_ARGS__);  \
     if (len < 0) {                                    \
         return -1;                                    \
     }                                                 \
@@ -259,19 +259,19 @@ static int mlog_head_formater(uint8_t level, const char *tag, char *log_buf)
     if (level_to_color[level])
     {
         MLOG_FORMAT_STR(log_buf, "%s", CSI_START);
-        MLOG_FORMAT_STR(log_buf + fmt_len, "%s", level_to_color[level]);
+        MLOG_FORMAT_STR(log_buf, "%s", level_to_color[level]);
     }
-    MLOG_FORMAT_STR(log_buf + fmt_len, "[%s%s]", level_to_info[level], tag);
+    MLOG_FORMAT_STR(log_buf, "[%s%s]", level_to_info[level], tag);
 
 #if MLOG_OUTPUT_THREAD_NAME
-    MLOG_FORMAT_STR(log_buf + fmt_len, " %s", mlog_port_thread_name());
+    MLOG_FORMAT_STR(log_buf, " %s", mlog_port_thread_name());
 #endif
 
 #if MLOG_OUTPUT_TIME
-    MLOG_FORMAT_STR(log_buf + fmt_len, " %s", mlog_port_time());
+    MLOG_FORMAT_STR(log_buf, " %s", mlog_port_time());
 #endif
 
-    MLOG_FORMAT_STR(log_buf + fmt_len, "%s", ": ");
+    MLOG_FORMAT_STR(log_buf, "%s", ": ");
     return fmt_len;
 }
 
@@ -280,12 +280,12 @@ static int mlog_tail_formater(uint8_t level, char *log_buf, size_t fmt_len)
     int old_fmt = fmt_len;
 
 #if MLOG_OUTPUT_NEWLINE
-    MLOG_FORMAT_STR(log_buf + fmt_len, "%s", MLOG_NEWLINE_SIGN);
+    MLOG_FORMAT_STR(log_buf, "%s", MLOG_NEWLINE_SIGN);
 #endif
 
     if (level_to_color[level])
     {
-        MLOG_FORMAT_STR(log_buf + fmt_len, "%s", CSI_END);
+        MLOG_FORMAT_STR(log_buf, "%s", CSI_END);
     }
 
     log_buf[fmt_len] = '\0';
@@ -353,6 +353,16 @@ void mlog_output(uint32_t level, const char *tag, const char *format, ...)
         mlog_unlock();
         va_end(args);
     }
+}
+
+/*
+TODO: hexdump support
+[tag]: 00000000  7f 45 4c 46 02 01 01 00  00 00 00 00 00 00 00 00  |.ELF............|
+[tag]: 00000010  03 00 3e 00 01 00 00 00  20 35 00 00 00 00 00 00  |..>..... 5......|
+[tag]: 00000020
+*/
+void mlog_hexdump(const char *tag, uint8_t *buf, size_t len)
+{
 }
 
 void mlog_raw(const char *format, ...)

@@ -32,7 +32,7 @@ static void *test_thead(void *prma)
         LOG_E("LOG_E %s.", (char *)prma);
         LOG_D("LOG_D %s.", (char *)prma);
         LOG_RAW("LOG_RAW %s.\n", (char *)prma);
-        usleep(200);
+        usleep(1000);
     }
     return NULL;
 }
@@ -40,6 +40,7 @@ static void *test_thead(void *prma)
 int main(void)
 {
     int count = 0;
+    uint8_t hex_buf[32];
     extern int mlog_console_be_init(void);
     mlog_init();
     mlog_console_be_init();
@@ -48,6 +49,7 @@ int main(void)
     LOG_W("LOG_W.");
     LOG_E("LOG_E.");
     LOG_D("LOG_D.");
+    LOG_HEX(hex_buf, 32);
 
     pthread_create(&tid_1, NULL, test_thead, "tid_1");
     pthread_create(&tid_2, NULL, test_thead, "tid_2");
@@ -61,7 +63,7 @@ int main(void)
         LOG_E("LOG_E %d.", count++);
         LOG_D("LOG_D %d.", count++);
         LOG_RAW("LOG_RAW %d.\n", count++);
-        usleep(100);
+        usleep(1000);
     }
 
     return 0;

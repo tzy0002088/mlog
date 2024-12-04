@@ -58,13 +58,7 @@ extern "C" {
 #define mlog_e(TAG, ...)
 #endif
 
-/*
-TODO: hexdump support
-00000000  7f 45 4c 46 02 01 01 00  00 00 00 00 00 00 00 00  |.ELF............|
-00000010  03 00 3e 00 01 00 00 00  80 35 00 00 00 00 00 00  |..>......5......|
-00000020  40 00                                             |@.|
-*/
-#define mlog_hex(TAG, ...)
+#define mlog_hex(TAG, buf, len)      mlog_hexdump(TAG, buf, len)
 
 typedef struct mlog_backend
 {

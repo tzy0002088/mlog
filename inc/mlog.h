@@ -21,12 +21,13 @@ extern "C"{
 #define LOG_E(...)          mlog_e(LOG_TAG, __VA_ARGS__)
 #define LOG_D(...)          mlog_d(LOG_TAG, __VA_ARGS__)
 #define LOG_RAW(...)        mlog_raw(__VA_ARGS__)
-#define LOG_HEX(...)        mlog_hex(LOG_TAG, __VA_ARGS__)
+#define LOG_HEX(buf, len)   mlog_hex(LOG_TAG, buf, len)
 
 /* init */
 int mlog_init(void);
 void mlog_output(uint32_t level, const char *tag, const char *format, ...);
 void mlog_raw(const char *format, ...);
+void mlog_hexdump(const char *tag, uint8_t *buf, size_t len);
 /* async */
 void mlog_async_output(const char *name);
 int mlog_async_loop(void);
