@@ -115,12 +115,12 @@ static const char *warning_info[] = {
     "Warning: There is not enough space to store the logs, please increase MLOG_ASYNC_LOG_BUF.\n",
 };
 
-static void mlog_lock(void)
+static inline void mlog_lock(void)
 {
     mlog_port_lock();
 }
 
-static void mlog_unlock(void)
+static inline void mlog_unlock(void)
 {
     mlog_port_unlock();
 }
@@ -186,12 +186,12 @@ static void mlog_output_to_all_backend(uint8_t level, const char *tag, char *log
 }
 
 #if MLOG_USING_ASYNC_OUTPUT
-static void mlog_async_lock(void)
+static inline void mlog_async_lock(void)
 {
     mlog_port_async_lock();
 }
 
-static void mlog_async_unlock(void)
+static inline void mlog_async_unlock(void)
 {
     mlog_port_async_unlock();
 }
@@ -210,23 +210,25 @@ static int mlog_async_put_frame(size_t size, struct mlog_frame *frame)
 {
     int ret = -1;
     struct mlog_frame *log_frame = NULL;
+    mlog_async_lock();
     if (mlog_async_buffer_space() >= size)
     {
-        mlog_async_lock();
         log_frame = (struct mlog_frame *)&mlog.async_buf.buf[mlog.async_buf.write_index];
         *log_frame = *frame;
         log_frame->log = (char *)log_frame + sizeof (struct mlog_frame);
         strncpy(log_frame->log, frame->log, frame->log_len);
         mlog.async_buf.write_index += size;
-        mlog_async_unlock();
         ret = 0;
     }
+    mlog_async_unlock();
+
     return ret;
 }
 
 static void *mlog_async_get_frame(size_t size)
 {
     char *buf = NULL;
+    mlog_async_lock();
     if (mlog_async_buffer_data_size() >= size)
     {
         buf = &mlog.async_buf.buf[mlog.async_buf.read_index];
@@ -235,10 +237,10 @@ static void *mlog_async_get_frame(size_t size)
     else
     {
         mlog.async_buf.read_index = 0;
-        mlog_async_lock();
         mlog.async_buf.write_index = 0;
-        mlog_async_unlock();
     }
+    mlog_async_unlock();
+
     return buf;
 }
 
