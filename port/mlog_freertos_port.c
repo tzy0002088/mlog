@@ -103,25 +103,22 @@ const char *mlog_port_time(void)
 
 int mlog_port_in_isr(void)
 {
-    return !(read_csr(mstatus) & 0x8);
+    BaseType_t xPortIsInsideISR(void);
+    return xPortIsInsideISR();
 }
 
 const char *mlog_port_thread_name(void)
 {
-    const char *name = "ISR";
+    const char *name = "N/A";
 
-    if (mlog_port_in_isr())
+    if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED)
     {
-        if (xTaskGetSchedulerState() == taskSCHEDULER_NOT_STARTED)
-            name = "N/A";
-    }
-    else
-    {
-        if (xTaskGetCurrentTaskHandle())
+        if (!mlog_port_in_isr())
             name = pcTaskGetName(NULL);
         else
-            name = "N/A";;
+            name = "ISR";
     }
+
     return name;
 }
 

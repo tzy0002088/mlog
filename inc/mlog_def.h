@@ -67,7 +67,7 @@ typedef struct mlog_backend
     int (*init)(struct mlog_backend *backend);
     int (*output)(struct mlog_backend *backend, const char *log, size_t length);
     /* Backend filter, If 0 is returned, it is considered necessary to filter the log */
-    int (*filter)(struct mlog_backend *backend, const char *tag, unsigned int level);
+    int (*filter)(struct mlog_backend *backend, const char *tag, uint8_t level);
     int (*flush)(struct mlog_backend *backend);
     int (*deinit)(struct mlog_backend *backend);
     slist_t list;

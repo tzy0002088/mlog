@@ -25,7 +25,7 @@ extern "C"{
 
 /* init */
 int mlog_init(void);
-void mlog_output(uint32_t level, const char *tag, const char *format, ...);
+void mlog_output(uint8_t level, const char *tag, const char *format, ...);
 void mlog_raw(const char *format, ...);
 void mlog_hexdump(const char *tag, uint8_t *buf, size_t len);
 /* async */
@@ -37,7 +37,7 @@ int mlog_backend_register(mlog_backend_t *backend, const char *name, int sup_col
 int mlog_backend_unregister(mlog_backend_t *backend);
 mlog_backend_t *mlog_backend_find(const char *name);
 /* filter */
-void mlog_global_filter_level_set(uint32_t level);
+void mlog_global_filter_level_set(uint8_t level);
 void mlog_global_filter_tag_set(const char *tag);
 
 /* port */

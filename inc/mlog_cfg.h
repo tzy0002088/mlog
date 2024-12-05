@@ -50,7 +50,11 @@
 #endif
 
 #ifndef MLOG_OUTPUT_NEWLINE
-#define MLOG_OUTPUT_NEWLINE           (1)
+#define MLOG_OUTPUT_NEWLINE         (1)
+#endif
+
+#ifndef MLOG_USING_COLOR
+#define MLOG_USING_COLOR            (1)
 #endif
 
 #endif //__MLOG_CFG_H__

@@ -11,7 +11,6 @@
 #include <stdio.h>
 #include <string.h>
 #include "mlog.h"
-#include "mlog_list.h"
 
 /*
 * +------+---------+------+---------+-----+--------+----------+
@@ -38,10 +37,12 @@ struct mlog
 {
     uint8_t is_init;
     char log_buf_th[MLOG_LINE_MAX_SIZE + 1];
+#if MLOG_USING_ISR_LOG
     char log_buf_isr[MLOG_LINE_MAX_SIZE + 1];
+#endif
     struct
     {
-        uint32_t level;
+        uint8_t level;
         char tag[MLOG_FILTER_TAG_MAX + 1];
     } filter;
     slist_t backend_list;
@@ -57,12 +58,11 @@ struct mlog
 #define MLOG_FORMAT_STR(dst, fmt, ...)          \
 do {                                                  \
     int len = snprintf(dst + fmt_len, MLOG_LINE_MAX_SIZE - fmt_len, fmt, __VA_ARGS__);  \
-    if (len > -1 && len <= (MLOG_LINE_MAX_SIZE - fmt_len)) {                                    \
-        fmt_len += len;                                    \
-    }                                                 \
-    else {  \
-        fmt_len = MLOG_LINE_MAX_SIZE; \
-    } \
+    if (len > -1 && len < MLOG_LINE_MAX_SIZE - fmt_len) { \
+        fmt_len += len;                                  \
+    } else {                        \
+        fmt_len = MLOG_LINE_MAX_SIZE;           \
+    }                           \
 } while(0)
 
 static struct mlog mlog = {0};
@@ -94,18 +94,25 @@ static struct mlog mlog = {0};
 #define MLOG_COLOR_ERROR         RED
 #endif
 
+#if MLOG_USING_COLOR
 static const char *level_to_color[] = {
     MLOG_COLOR_ERROR,
     MLOG_COLOR_WARNING,
     MLOG_COLOR_INFO,
     MLOG_COLOR_DBG
 };
+#endif
 
 static const char *level_to_info[] = {
     "E/",
     "W/",
     "I/",
     "D/",
+};
+
+static const char *warning_info[] = {
+    "Warning: The current configuration does not support interrupt context usage, please enable MLOG_USING_ISR_LOG.\n",
+    "Warning: There is not enough space to store the logs, please increase MLOG_ASYNC_LOG_BUF.\n",
 };
 
 static void mlog_lock(void)
@@ -116,6 +123,15 @@ static void mlog_lock(void)
 static void mlog_unlock(void)
 {
     mlog_port_unlock();
+}
+
+static void mlog_output_to_console(const char *log_buf, size_t log_len)
+{
+    mlog_backend_t *backend = mlog_backend_find("console");
+    if (backend && backend->output)
+    {
+        backend->output(backend, log_buf, log_len);
+    }
 }
 
 static char *mlog_get_log_buf(void)
@@ -129,25 +145,14 @@ static char *mlog_get_log_buf(void)
 #if MLOG_USING_ISR_LOG
         return mlog.log_buf_isr;
 #else
+        mlog_output_to_console(warning_info[0], strlen(warning_info[0]));
         return NULL;
 #endif
     }
 }
 
-#if !MLOG_USING_ASYNC_OUTPUT
-static void mlog_output_to_console(char *log_buf, size_t log_len)
-{
-    mlog_backend_t *backend = mlog_backend_find("console");
-    if (backend && backend->output)
-    {
-        backend->output(backend, log_buf, log_len);
-    }
-}
-#endif
-
 static void mlog_output_to_all_backend(uint8_t level, const char *tag, char *log_buf, size_t log_len)
 {
-    size_t drop_len;
     slist_t *node;
     mlog_backend_t *backend;
     for (node = slist_first(&mlog.backend_list); node; node = slist_next(node))
@@ -157,23 +162,25 @@ static void mlog_output_to_all_backend(uint8_t level, const char *tag, char *log
         {
             if (backend->filter && !backend->filter(backend, tag, level))
                 continue;
-
+#if !MLOG_USING_COLOR
+            backend->output(backend, log_buf, log_len);
+#else
             if (backend->sup_color)
             {
                 backend->output(backend, log_buf, log_len);
             }
             else
             {
-                log_len -= 1;
                 if (level_to_color[level])
                 {
-                    drop_len = strlen(level_to_color[level]) + strlen(CSI_START);
+                    size_t drop_len = strlen(level_to_color[level]) + strlen(CSI_START);
                     log_buf += drop_len;
                     log_len -= (drop_len + strlen(CSI_END));
                     log_buf[log_len] = '\0';
                 }
                 backend->output(backend, log_buf, log_len);
             }
+#endif
         }
     }
 }
@@ -258,11 +265,14 @@ static int mlog_head_formater(uint8_t level, const char *tag, char *log_buf)
 {
     int fmt_len = 0;
 
+#if MLOG_USING_COLOR
     if (level_to_color[level])
     {
         MLOG_FORMAT_STR(log_buf, "%s", CSI_START);
         MLOG_FORMAT_STR(log_buf, "%s", level_to_color[level]);
     }
+#endif
+
     MLOG_FORMAT_STR(log_buf, "[%s%s]", level_to_info[level], tag);
 
 #if MLOG_OUTPUT_THREAD_NAME
@@ -277,37 +287,66 @@ static int mlog_head_formater(uint8_t level, const char *tag, char *log_buf)
     return fmt_len;
 }
 
-static int mlog_tail_formater(uint8_t level, char *log_buf, size_t fmt_len)
+/* Prevent snprintf from truncating the source string when there is one byte left */
+static int mlog_strcpy(char *dst, const char *src, int fmt_len)
 {
-    int old_fmt = fmt_len;
-
-#if MLOG_OUTPUT_NEWLINE
-    MLOG_FORMAT_STR(log_buf, "%s", MLOG_NEWLINE_SIGN);
-#endif
-
-    if (level_to_color[level])
+    const char *temp = src;
+    while(*src)
     {
-        MLOG_FORMAT_STR(log_buf, "%s", CSI_END);
+        if (fmt_len < MLOG_LINE_MAX_SIZE)
+            *dst++ = *src++;
+        else
+            break;
     }
 
-    log_buf[fmt_len] = '\0';
-    return fmt_len - old_fmt;
+    return src - temp;
 }
 
-static int mlog_formater(uint32_t level, const char *tag, char *log_buf, const char *format, va_list args)
+static int mlog_tail_formater(uint8_t level, char *log_buf, size_t fmt_len)
 {
-    int head_len = -1, log_len = -1, tail_len = -1;
+    int drop_len = 0;
+
+#if MLOG_OUTPUT_NEWLINE
+    drop_len += strlen(MLOG_NEWLINE_SIGN);
+#endif
+
+#if MLOG_USING_COLOR
+    drop_len += strlen(CSI_END);
+#endif
+
+    if (fmt_len + drop_len > MLOG_LINE_MAX_SIZE)
+    {
+        fmt_len -= drop_len;
+    }
+
+#if MLOG_OUTPUT_NEWLINE
+    fmt_len += mlog_strcpy(log_buf + fmt_len, MLOG_NEWLINE_SIGN, fmt_len);
+#endif
+
+#if MLOG_USING_COLOR
+    if (level_to_color[level])
+        fmt_len += mlog_strcpy(log_buf + fmt_len, CSI_END, fmt_len);
+#endif
+    /* append end sign*/
+    log_buf[fmt_len] = '\0';
+    return fmt_len;
+}
+
+static int mlog_formater(uint8_t level, const char *tag, char *log_buf, const char *format, va_list args)
+{
+    int head_len, log_len, fmt_len;
 
     head_len = mlog_head_formater(level, tag, log_buf);
-    if (head_len > 0)
-        log_len = vsnprintf(log_buf + head_len, MLOG_LINE_MAX_SIZE - head_len, format, args);
-    if (log_len > 0)
-        tail_len =  mlog_tail_formater(level, log_buf, head_len + log_len);
+    log_len = vsnprintf(log_buf + head_len, MLOG_LINE_MAX_SIZE - head_len, format, args);
+    if (log_len > -1 && log_len < MLOG_LINE_MAX_SIZE - head_len)
+        fmt_len = head_len + log_len;
+    else
+        fmt_len = MLOG_LINE_MAX_SIZE;
 
-    return tail_len >= 0 ? head_len + log_len + tail_len : -1;
+    return mlog_tail_formater(level, log_buf, fmt_len);
 }
 
-static void mlog_do_output(uint32_t level, const char *tag, char *log_buf, size_t log_len)
+static void mlog_do_output(uint8_t level, const char *tag, char *log_buf, size_t log_len)
 {
 #if MLOG_USING_ASYNC_OUTPUT
     struct mlog_frame log_frame;
@@ -322,6 +361,15 @@ static void mlog_do_output(uint32_t level, const char *tag, char *log_buf, size_
     {
         mlog_port_async_notify();
     }
+    else
+    {
+        static int is_warning = 0;
+        if (!is_warning)
+        {
+            is_warning = 1;
+            mlog_output_to_console(warning_info[1], strlen(warning_info[1]));
+        }
+    }
 #else
     if (!mlog_port_in_isr())
         mlog_output_to_all_backend(level, tag, log_buf, log_len);
@@ -330,7 +378,7 @@ static void mlog_do_output(uint32_t level, const char *tag, char *log_buf, size_
 #endif
 }
 
-void mlog_output(uint32_t level, const char *tag, const char *format, ...)
+void mlog_output(uint8_t level, const char *tag, const char *format, ...)
 {
     va_list args;
     int fmt_len = 0;
@@ -350,8 +398,7 @@ void mlog_output(uint32_t level, const char *tag, const char *format, ...)
         va_start(args, format);
         mlog_lock();
         fmt_len = mlog_formater(level, tag, log_buf, format, args);
-        if (fmt_len > 0 && fmt_len <= MLOG_LINE_MAX_SIZE)
-            mlog_do_output(level, tag, log_buf, fmt_len + 1); // Allocate an extra byte terminator
+        mlog_do_output(level, tag, log_buf, fmt_len);
         mlog_unlock();
         va_end(args);
     }
@@ -360,18 +407,20 @@ void mlog_output(uint32_t level, const char *tag, const char *format, ...)
 static int mlog_hex_formater(const char *tag, char *log_buf, uint8_t *src_buf, size_t src_len)
 {
 #define __is_print_sign(ch)       ((unsigned int)((ch) - ' ') < (127u - ' '))
-    int loop = src_len / 16;
-    int remain = src_len % 16;
+#define HEXDUMP_DEFAULT_WIDTH           (16)
+
+    int line = src_len / HEXDUMP_DEFAULT_WIDTH;
+    int remain = src_len % HEXDUMP_DEFAULT_WIDTH;
     int fmt_len = 0;
     int addr = 0;
     uint8_t *tmp_buf = src_buf;
 
-    while(loop--)
+    while(line--)
     {
         MLOG_FORMAT_STR(log_buf, "[%s]: %08X  ", tag, addr);
-        for (int i = 0; i < 16; i++)
+        for (int i = 0; i < HEXDUMP_DEFAULT_WIDTH; i++)
         {
-            if (i != 7)
+            if ((i + 1) % 8 != 0)
             {
                 MLOG_FORMAT_STR(log_buf, "%02X ", *src_buf++);
             }
@@ -380,10 +429,10 @@ static int mlog_hex_formater(const char *tag, char *log_buf, uint8_t *src_buf, s
                 MLOG_FORMAT_STR(log_buf, "%02X  ", *src_buf++);
             }
         }
-        addr += 16;
+        addr += HEXDUMP_DEFAULT_WIDTH;
         MLOG_FORMAT_STR(log_buf, "%s", " |");
 
-        for (int j = 0; j < 16; j++)
+        for (int j = 0; j < HEXDUMP_DEFAULT_WIDTH; j++)
         {
             MLOG_FORMAT_STR(log_buf, "%c", __is_print_sign(tmp_buf[j]) ? tmp_buf[j] : '.');
         }
@@ -393,7 +442,7 @@ static int mlog_hex_formater(const char *tag, char *log_buf, uint8_t *src_buf, s
 
     /* Non aligned parts */
     MLOG_FORMAT_STR(log_buf, "[%s]: %08X  ", tag, addr);
-    for (int j = 0; j < 16; j++)
+    for (int j = 0; j < HEXDUMP_DEFAULT_WIDTH; j++)
     {
         if (j < remain)
         {
@@ -404,7 +453,7 @@ static int mlog_hex_formater(const char *tag, char *log_buf, uint8_t *src_buf, s
             MLOG_FORMAT_STR(log_buf, "%s", "   ");
         }
 
-        if (j == 7)
+        if ((j + 1) % 8 == 0)
             MLOG_FORMAT_STR(log_buf, "%s", " ");
     }
     MLOG_FORMAT_STR(log_buf, "%s", " |");
@@ -413,7 +462,12 @@ static int mlog_hex_formater(const char *tag, char *log_buf, uint8_t *src_buf, s
     {
         MLOG_FORMAT_STR(log_buf, "%c", __is_print_sign(tmp_buf[j]) ? tmp_buf[j] : '.');
     }
-    MLOG_FORMAT_STR(log_buf, "%s", "|\n");
+
+    if (fmt_len + strlen("|\n") > MLOG_LINE_MAX_SIZE)
+        fmt_len -= strlen("|\n");
+    fmt_len += mlog_strcpy(log_buf + fmt_len, "|\n", fmt_len);
+    /* append end sign*/
+    log_buf[fmt_len] = '\0';
 
     return fmt_len;
 }
@@ -426,8 +480,7 @@ void mlog_hexdump(const char *tag, uint8_t *buf, size_t len)
     {
         mlog_lock();
         fmt_len = mlog_hex_formater(tag, log_buf, buf, len);
-        if (fmt_len > 0 && fmt_len <= MLOG_LINE_MAX_SIZE)
-            mlog_do_output(LOG_LVL_DBG, "", log_buf, fmt_len + 1);
+        mlog_do_output(LOG_LVL_DBG, "", log_buf, fmt_len);
         mlog_unlock();
     }
 }
@@ -444,8 +497,9 @@ void mlog_raw(const char *format, ...)
         va_start(args, format);
         mlog_lock();
         fmt_len = vsnprintf(log_buf, MLOG_LINE_MAX_SIZE, format, args);
-        if (fmt_len > 0 && fmt_len <= MLOG_LINE_MAX_SIZE)
-            mlog_do_output(LOG_LVL_DBG, "", log_buf, fmt_len + 1); // Allocate an extra byte terminator
+        if (fmt_len < -1 || fmt_len > MLOG_LINE_MAX_SIZE)
+            fmt_len = MLOG_LINE_MAX_SIZE;
+        mlog_do_output(LOG_LVL_DBG, "", log_buf, fmt_len);
         mlog_unlock();
         va_end(args);
     }
@@ -522,7 +576,7 @@ int mlog_async_loop(void)
     return -1;
 }
 
-void mlog_global_filter_level_set(uint32_t level)
+void mlog_global_filter_level_set(uint8_t level)
 {
     mlog.filter.level = level;
 }
