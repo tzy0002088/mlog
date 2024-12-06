@@ -90,6 +90,9 @@ int mlog_port_async_wait(int timeout_ms)
 {
     int ret = -1;
     struct timespec ts;
+
+    /* To avoid the accumulation of semaphores, which may cause asynchronous threads to frequently wake up and fail to retrieve logs */
+    sem_reset(&notify);
     if (timeout_ms > 0)
     {
         clock_gettime(CLOCK_REALTIME, &ts);
@@ -110,10 +113,7 @@ int mlog_port_async_wait(int timeout_ms)
     {
         ret = sem_wait(&notify);
     }
-    if (ret == 0)
-    {
-        sem_reset(&notify);
-    }
+
 
     return ret;
 }

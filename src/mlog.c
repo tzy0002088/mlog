@@ -173,10 +173,9 @@ static void mlog_output_to_all_backend(uint8_t level, const char *tag, char *log
             {
                 if (level_to_color[level])
                 {
-                    size_t drop_len = strlen(level_to_color[level]) + strlen(CSI_START);
+                    size_t drop_len = strlen(level_to_color[level]) + sizeof(CSI_START) - 1;
                     log_buf += drop_len;
-                    log_len -= (drop_len + strlen(CSI_END));
-                    log_buf[log_len] = '\0';
+                    log_len -= (drop_len + sizeof(CSI_END) - 1);
                 }
                 backend->output(backend, log_buf, log_len);
             }
@@ -309,11 +308,11 @@ static int mlog_tail_formater(uint8_t level, char *log_buf, size_t fmt_len)
     int drop_len = 0;
 
 #if MLOG_OUTPUT_NEWLINE
-    drop_len += strlen(MLOG_NEWLINE_SIGN);
+    drop_len += sizeof(MLOG_NEWLINE_SIGN) - 1;
 #endif
 
 #if MLOG_USING_COLOR
-    drop_len += strlen(CSI_END);
+    drop_len += sizeof(CSI_END) - 1;
 #endif
 
     if (fmt_len + drop_len > MLOG_LINE_MAX_SIZE)
@@ -465,8 +464,8 @@ static int mlog_hex_formater(const char *tag, char *log_buf, uint8_t *src_buf, s
         MLOG_FORMAT_STR(log_buf, "%c", __is_print_sign(tmp_buf[j]) ? tmp_buf[j] : '.');
     }
 
-    if (fmt_len + strlen("|\n") > MLOG_LINE_MAX_SIZE)
-        fmt_len -= strlen("|\n");
+    if (fmt_len + sizeof("|\n") - 1 > MLOG_LINE_MAX_SIZE)
+        fmt_len -= (sizeof("|\n") - 1);
     fmt_len += mlog_strcpy(log_buf + fmt_len, "|\n", fmt_len);
     /* append end sign*/
     log_buf[fmt_len] = '\0';
